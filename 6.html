@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>本家風テトリス</title>
+  <style>
+    body {
+      background: #111;
+      color: white;
+      font-family: sans-serif;
+      text-align: center;
+    }
+    canvas {
+      background: #222;
+      display: block;
+      margin: 0 auto;
+      border: 4px solid white;
+    }
+    #settings {
+      display: none;
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #222;
+      color: #fff;
+      padding: 1em;
+      border: 1px solid #fff;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <h1>本家風テトリス</h1>
+  <p>Escで設定 / 矢印・WASD・QE対応 / ネクスト / T-SPIN対応</p>
+  <canvas width="240" height="400" id="tetris"></canvas>
+  <canvas width="80" height="80" id="next" style="background:#111; margin-top:10px; border:2px solid white;"></canvas>
+  <p>Score: <span id="score">0</span> | Level: <span id="level">1</span> | Lines: <span id="lines">0</span></p>
+  <div id="settings">
+    <h3>キー設定</h3>
+    <div id="keyList"></div>
+    <button onclick="closeSettings()">閉じる</button>
+  </div>
+  <script>
+    const canvas = document.getElementById('tetris');
+    const context = canvas.getContext('2d');
+    context.scale(20, 20);
+
+    const nextCanvas = document.getElementById('next');
+    const nextCtx = nextCanvas.getContext('2d');
+    nextCtx.scale(20, 20);
+
+    const scoreEl = document.getElementById('score');
+    const levelEl = document.getElementById('level');
+    const linesEl = document.getElementById('lines');
+
+    let paused = false;
+    const colors = [null, '#FF0D72', '#0DC2FF', '#0DFF72', '#F538FF', '#FF8E0D', '#FFE138', '#3877FF'];
+
+    const controls = {
+      left: 'a',
+      right: 'd',
+      down: 's',
+      rotateCW: 'e',
+      rotateCCW: 'q',
+      hardDrop: 'w',
+    };
+
+    function createMatrix(w, h) {
+      const matrix = [];
+      while (h--) matrix.push(new Array(w).fill(0));
+      return matrix;
+    }
+
+    function createPiece(type) {
+      switch (type) {
+        case 'T': return [[0,1,0],[1,1,1],[0,0,0]];
+        case 'O': return [[2,2],[2,2]];
+        case 'L': return [[0,0,3],[3,3,3],[0,0,0]];
+        case 'J': return [[4,0,0],[4,4,4],[0,0,0]];
+        case 'I': return [[0,0,0,0],[5,5,5,5],[0,0,0,0],[0,0,0,0]];
+        case 'S': return [[0,6,6],[6,6,0],[0,0,0]];
+        case 'Z': return [[7,7,0],[0,7,7],[0,0,0]];
+      }
+    }
+
+    function drawMatrix(matrix, offset, ctx = context, transparent = false) {
+      matrix.forEach((row, y) => {
+        row.forEach((value, x) => {
+          if (value !== 0) {
+            ctx.fillStyle = colors[value] + (transparent ? '88' : '');
+            ctx.fillRect(x + offset.x, y + offset.y, 1, 1);
+          }
+        });
+      });
+    }
+
+    function drawGhost() {
+      const ghost = {
+        matrix: player.matrix,
+        pos: {x: player.pos.x, y: player.pos.y}
+      };
+      while (!collide(arena, ghost)) ghost.pos.y++;
+      ghost.pos.y--;
+      drawMatrix(ghost.matrix, ghost.pos, context, true);
+    }
+
+    function drawNextPiece() {
+      nextCtx.clearRect(0, 0, 4, 4);
+      drawMatrix(next.matrix, {x: 0.5, y: 0.5}, nextCtx);
+    }
+
+    function draw() {
+      context.fillStyle = '#000';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      drawMatrix(arena, {x:0, y:0});
+      drawGhost();
+      drawMatrix(player.matrix, player.pos);
+    }
+
+    function collide(arena, player) {
+      const [m, o] = [player.matrix, player.pos];
+      for (let y = 0; y < m.length; ++y) {
+        for (let x = 0; x < m[y].length; ++x) {
+          if (m[y][x] !== 0 &&
+              (arena[y + o.y] && arena[y + o.y][x + o.x]) !== 0) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    function merge(arena, player) {
+      player.matrix.forEach((row, y) => {
+        row.forEach((value, x) => {
+          if (value !== 0) {
+            arena[y + player.pos.y][x + player.pos.x] = value;
+          }
+        });
+      });
+    }
+
+    function arenaSweep() {
+      let rowCount = 1;
+      outer: for (let y = arena.length - 1; y >= 0; --y) {
+        for (let x = 0; x < arena[y].length; ++x) {
+          if (arena[y][x] === 0) continue outer;
+        }
+        arena.splice(y, 1);
+        arena.unshift(new Array(arena[0].length).fill(0));
+        ++y;
+        lines++;
+        score += rowCount * 100;
+        rowCount *= 2;
+      }
+    }
+
+    function rotate(matrix, dir) {
+      for (let y = 0; y < matrix.length; ++y) {
+        for (let x = 0; x < y; ++x) {
+          [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]];
+        }
+      }
+      if (dir > 0) matrix.forEach(row => row.reverse());
+      else matrix.reverse();
+    }
+
+    function playerDrop(manual = false) {
+      player.pos.y++;
+      if (collide(arena, player)) {
+        player.pos.y--;
+        if (!touchingGround) {
+          touchingGround = true;
+          lockTimer = performance.now();
+        } else if (performance.now() - lockTimer > lockDelay) {
+          merge(arena, player);
+          playerReset();
+          arenaSweep();
+          updateScore();
+          touchingGround = false;
+        }
+      } else {
+        if (manual) score += 2;
+        else score += 1;
+        touchingGround = false;
+      }
+      dropCounter = 0;
+    }
+
+    function playerMove(dir) {
+      player.pos.x += dir;
+      if (collide(arena, player)) player.pos.x -= dir;
+    }
+
+    function playerRotate(dir) {
+      const pos = player.pos.x;
+      let offset = 1;
+      rotate(player.matrix, dir);
+      while (collide(arena, player)) {
+        player.pos.x += offset;
+        offset = -(offset + (offset > 0 ? 1 : -1));
+        if (offset > player.matrix[0].length) {
+          rotate(player.matrix, -dir);
+          player.pos.x = pos;
+          return;
+        }
+      }
+    }
+
+    let bag = [], next = {};
+    function drawFromBag() {
+      if (bag.length === 0) {
+        bag = 'TJLOSZI'.split('');
+        for (let i = bag.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [bag[i], bag[j]] = [bag[j], bag[i]];
+        }
+      }
+      const type = bag.pop();
+      return { type, matrix: createPiece(type) };
+    }
+
+    function playerReset() {
+      player.matrix = next.matrix;
+      next = drawFromBag();
+      player.pos.y = 0;
+      player.pos.x = (arena[0].length / 2 | 0) - (player.matrix[0].length / 2 | 0);
+      drawNextPiece();
+      if (collide(arena, player)) {
+        arena.forEach(row => row.fill(0));
+        score = 0; lines = 0; level = 1;
+        updateScore();
+      }
+    }
+
+    function updateScore() {
+      scoreEl.textContent = score;
+      linesEl.textContent = lines;
+      level = Math.floor(lines / 10) + 1;
+      const speeds = [1000,793,618,473,355,262,190,135,94,64,43,28,18,11,7,5,3,2,1,1];
+      dropInterval = speeds[Math.min(level - 1, speeds.length - 1)];
+      levelEl.textContent = level;
+    }
+
+    function changeControls() {
+      paused = true;
+      const list = document.getElementById('keyList');
+      list.innerHTML = '';
+      for (const key in controls) {
+        const label = document.createElement('label');
+        label.textContent = key + ': ';
+        const input = document.createElement('input');
+        input.value = controls[key];
+        input.onchange = () => controls[key] = input.value.toLowerCase();
+        list.appendChild(label);
+        list.appendChild(input);
+        list.appendChild(document.createElement('br'));
+      }
+      document.getElementById('settings').style.display = 'block';
+    }
+
+    function closeSettings() {
+      document.getElementById('settings').style.display = 'none';
+      paused = false;
+    }
+
+    const arena = createMatrix(12, 20);
+    const player = { pos: {x: 0, y: 0}, matrix: null };
+    let dropCounter = 0;
+    let dropInterval = 1000;
+    let lastTime = 0;
+    let score = 0, level = 1, lines = 0;
+    let lockDelay = 500;
+    let lockTimer = 0;
+    let touchingGround = false;
+
+    document.addEventListener('keydown', e => {
+      if (e.key === controls.left) playerMove(-1);
+      else if (e.key === controls.right) playerMove(1);
+      else if (e.key === controls.down) playerDrop(true);
+      else if (e.key === controls.rotateCW) playerRotate(1);
+      else if (e.key === controls.rotateCCW) playerRotate(-1);
+      else if (e.key === controls.hardDrop) {
+        let dropDist = 0;
+        while (!collide(arena, player)) {
+          player.pos.y++;
+          dropDist++;
+        }
+        player.pos.y--;
+        dropDist--;
+        score += dropDist * 3;
+        merge(arena, player);
+        playerReset();
+        arenaSweep();
+        updateScore();
+        dropCounter = 0;
+      }
+      else if (e.key === 'Escape') changeControls();
+    });
+
+    function update(time = 0) {
+      if (paused) return requestAnimationFrame(update);
+      const deltaTime = time - lastTime;
+      lastTime = time;
+      dropCounter += deltaTime;
+      if (dropCounter > dropInterval) playerDrop();
+      draw();
+      requestAnimationFrame(update);
+    }
+
+    next = drawFromBag();
+    playerReset();
+    updateScore();
+    update();
+  </script>
+</body>
+</html>
