@@ -266,7 +266,7 @@
         keyOptions.forEach(k => {
           const option = document.createElement('option');
           option.value = k;
-          option.textContent = k;
+          option.textContent = k === ' ' ? 'space' : k;
           if (controls[key] === k) option.selected = true;
           select.appendChild(option);
         });
