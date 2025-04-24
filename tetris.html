@@ -16,7 +16,7 @@
       margin: 0 auto;
       border: 4px solid white;
     }
-    #settings, #pauseMenu {
+    #settings, #pauseMenu, #startScreen, #gameOverScreen {
       display: none;
       position: absolute;
       top: 50%;
@@ -24,17 +24,17 @@
       transform: translate(-50%, -50%);
       background: #222;
       color: #fff;
-      padding: 1em 2em;
+      padding: 1em;
       border: 1px solid #fff;
       z-index: 10;
     }
-    #pauseMenu {
-      display: none;
-      flex-direction: column;
-      gap: 10px;
-    }
-    #pauseMenu button {
+    #pauseMenu button, #settings button, #startScreen button, #gameOverScreen button {
+      display: block;
       width: 100%;
+      margin: 5px 0;
+      background: #333;
+      color: white;
+      border: 1px solid #fff;
       padding: 10px;
       font-size: 16px;
     }
@@ -52,11 +52,21 @@
   <canvas width="80" height="80" id="next" style="background:#111; margin-top:10px; border:2px solid white;"></canvas>
   <p>Score: <span id="score">0</span> | Level: <span id="level">1</span> | Lines: <span id="lines">0</span></p>
 
+  <div id="startScreen">
+    <h2>テトリスへようこそ！</h2>
+    <button onclick="startGame()">ゲーム開始</button>
+  </div>
+
+  <div id="gameOverScreen">
+    <h2>ゲームオーバー</h2>
+    <button onclick="startGame()">もう一度</button>
+  </div>
+
   <div id="pauseMenu">
-    <h3>ポーズ</h3>
+    <h3>ポーズメニュー</h3>
     <button onclick="changeControls()">設定</button>
     <button onclick="startGame()">リセット</button>
-    <button onclick="resumeGame()">再開</button>
+    <button onclick="togglePause()">再開</button>
   </div>
 
   <div id="settings">
@@ -78,7 +88,13 @@
     const levelEl = document.getElementById('level');
     const linesEl = document.getElementById('lines');
 
-    let paused = false;
+    let paused = true;
+    let gameStarted = false;
+
+    const startScreen = document.getElementById('startScreen');
+    const pauseMenu = document.getElementById('pauseMenu');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+
     const colors = [null, '#FF0D72', '#0DC2FF', '#0DFF72', '#F538FF', '#FF8E0D', '#FFE138', '#3877FF'];
 
     const controls = {
@@ -212,6 +228,26 @@
       dropCounter = 0;
     }
 
+    function togglePause() {
+      paused = !paused;
+      pauseMenu.style.display = paused ? 'block' : 'none';
+      if (!paused) update();
+    }
+
+    function startGame() {
+      arena.forEach(row => row.fill(0));
+      score = 0; lines = 0; level = 1;
+      next = drawFromBag();
+      playerReset();
+      updateScore();
+      gameStarted = true;
+      paused = false;
+      startScreen.style.display = 'none';
+      gameOverScreen.style.display = 'none';
+      pauseMenu.style.display = 'none';
+      update();
+    }
+
     function playerMove(dir) {
       player.pos.x += dir;
       if (collide(arena, player)) player.pos.x -= dir;
@@ -252,9 +288,8 @@
       player.pos.x = (arena[0].length / 2 | 0) - (player.matrix[0].length / 2 | 0);
       drawNextPiece();
       if (collide(arena, player)) {
-        arena.forEach(row => row.fill(0));
-        score = 0; lines = 0; level = 1;
-        updateScore();
+        gameOverScreen.style.display = 'block';
+        paused = true;
       }
     }
 
@@ -268,14 +303,10 @@
     }
 
     function changeControls() {
-      document.getElementById('pauseMenu').style.display = 'none';
       paused = true;
       const list = document.getElementById('keyList');
       list.innerHTML = '';
-      const keyOptions = [
-        'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z',
-        '1','2','3','4','5','6','7','8','9','0','Shift','Alt','Ctrl','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter',' '
-      ];
+      const keyOptions = [...'abcdefghijklmnopqrstuvwxyz1234567890', 'Shift', 'Alt', 'Ctrl', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', ' '];
       for (const key in controls) {
         const label = document.createElement('label');
         label.textContent = key + ': ';
@@ -297,26 +328,7 @@
 
     function closeSettings() {
       document.getElementById('settings').style.display = 'none';
-      paused = false;
-    }
-
-    function showPauseMenu() {
-      paused = true;
-      document.getElementById('pauseMenu').style.display = 'flex';
-    }
-
-    function resumeGame() {
-      document.getElementById('pauseMenu').style.display = 'none';
-      paused = false;
-    }
-
-    function startGame() {
-      document.getElementById('pauseMenu').style.display = 'none';
-      arena.forEach(row => row.fill(0));
-      score = 0; lines = 0; level = 1;
-      updateScore();
-      playerReset();
-      paused = false;
+      pauseMenu.style.display = 'block';
     }
 
     const arena = createMatrix(12, 20);
@@ -330,7 +342,7 @@
     let touchingGround = false;
 
     document.addEventListener('keydown', e => {
-      if (paused && e.key !== 'Escape') return;
+      if (!gameStarted) return;
       if (e.key === controls.left) playerMove(-1);
       else if (e.key === controls.right) playerMove(1);
       else if (e.key === controls.down) playerDrop(true);
@@ -352,8 +364,12 @@
         dropCounter = 0;
       }
       else if (e.key === 'Escape') {
-        if (paused) resumeGame();
-        else showPauseMenu();
+        if (!paused) {
+          paused = true;
+          pauseMenu.style.display = 'block';
+        } else {
+          pauseMenu.style.display = pauseMenu.style.display === 'block' ? 'none' : 'block';
+        }
       }
     });
 
@@ -367,10 +383,7 @@
       requestAnimationFrame(update);
     }
 
-    next = drawFromBag();
-    playerReset();
-    updateScore();
-    update();
+    startScreen.style.display = 'block';
   </script>
 </body>
 </html>
