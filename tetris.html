@@ -9,7 +9,6 @@
       color: white;
       font-family: sans-serif;
       text-align: center;
-      margin: 0;
     }
     canvas {
       background: #222;
@@ -17,7 +16,7 @@
       margin: 0 auto;
       border: 4px solid white;
     }
-    #settings, #pauseMenu, #startScreen, #gameOverScreen {
+    #settings, #pauseMenu {
       display: none;
       position: absolute;
       top: 50%;
@@ -28,14 +27,15 @@
       padding: 1em 2em;
       border: 1px solid #fff;
       z-index: 10;
-      text-align: center;
     }
-    #pauseMenu button,
-    #settings button,
-    #startScreen button,
-    #gameOverScreen button {
-      margin: 0.5em;
-      padding: 10px 20px;
+    #pauseMenu {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #pauseMenu button {
+      width: 100%;
+      padding: 10px;
       font-size: 16px;
     }
     select {
@@ -52,24 +52,10 @@
   <canvas width="80" height="80" id="next" style="background:#111; margin-top:10px; border:2px solid white;"></canvas>
   <p>Score: <span id="score">0</span> | Level: <span id="level">1</span> | Lines: <span id="lines">0</span></p>
 
-  <!-- 各種メニュー -->
-  <div id="startScreen">
-    <h2>テトリスへようこそ</h2>
-    <button onclick="startGame()">スタート</button>
-  </div>
-
-  <div id="gameOverScreen">
-    <h2>ゲームオーバー</h2>
-    <button onclick="startGame()">もう一度プレイ</button>
-  </div>
-
   <div id="pauseMenu">
-    <h3>ポーズメニュー</h3>
-    <br>
-    <button onclick="changeControls()">キー設定</button>
-    <br>
+    <h3>ポーズ</h3>
+    <button onclick="changeControls()">設定</button>
     <button onclick="startGame()">リセット</button>
-    <br>
     <button onclick="resumeGame()">再開</button>
   </div>
 
@@ -266,8 +252,9 @@
       player.pos.x = (arena[0].length / 2 | 0) - (player.matrix[0].length / 2 | 0);
       drawNextPiece();
       if (collide(arena, player)) {
-        showGameOver();
-        return;
+        arena.forEach(row => row.fill(0));
+        score = 0; lines = 0; level = 1;
+        updateScore();
       }
     }
 
@@ -281,14 +268,13 @@
     }
 
     function changeControls() {
-      paused = true;
       document.getElementById('pauseMenu').style.display = 'none';
+      paused = true;
       const list = document.getElementById('keyList');
       list.innerHTML = '';
       const keyOptions = [
         'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z',
-        '1','2','3','4','5','6','7','8','9','0',
-        'Shift','Alt','Ctrl','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter',' '
+        '1','2','3','4','5','6','7','8','9','0','Shift','Alt','Ctrl','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter',' '
       ];
       for (const key in controls) {
         const label = document.createElement('label');
@@ -311,39 +297,26 @@
 
     function closeSettings() {
       document.getElementById('settings').style.display = 'none';
+      paused = false;
     }
 
-    function togglePauseMenu() {
-      if (paused) {
-        resumeGame();
-      } else {
-        paused = true;
-        document.getElementById('pauseMenu').style.display = 'flex';
-      }
+    function showPauseMenu() {
+      paused = true;
+      document.getElementById('pauseMenu').style.display = 'flex';
     }
 
     function resumeGame() {
-      paused = false;
       document.getElementById('pauseMenu').style.display = 'none';
-      document.getElementById('settings').style.display = 'none';
+      paused = false;
     }
 
     function startGame() {
-      document.getElementById('startScreen').style.display = 'none';
-      document.getElementById('gameOverScreen').style.display = 'none';
       document.getElementById('pauseMenu').style.display = 'none';
       arena.forEach(row => row.fill(0));
       score = 0; lines = 0; level = 1;
-      paused = false;
       updateScore();
-      next = drawFromBag();
       playerReset();
-      update();
-    }
-
-    function showGameOver() {
-      paused = true;
-      document.getElementById('gameOverScreen').style.display = 'block';
+      paused = false;
     }
 
     const arena = createMatrix(12, 20);
@@ -379,7 +352,8 @@
         dropCounter = 0;
       }
       else if (e.key === 'Escape') {
-        togglePauseMenu();
+        if (paused) resumeGame();
+        else showPauseMenu();
       }
     });
 
@@ -393,9 +367,10 @@
       requestAnimationFrame(update);
     }
 
-    // 最初はスタート画面表示
-    document.getElementById('startScreen').style.display = 'block';
+    next = drawFromBag();
+    playerReset();
+    updateScore();
+    update();
   </script>
 </body>
 </html>
-
