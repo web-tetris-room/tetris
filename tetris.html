@@ -28,11 +28,16 @@
       border: 1px solid #fff;
       z-index: 10;
     }
+    select {
+      background: #333;
+      color: white;
+      border: 1px solid #fff;
+      padding: 5px;
+    }
   </style>
 </head>
 <body>
   <h1>テトリス</h1>
-  <p>Escで設定</p>
   <canvas width="240" height="400" id="tetris"></canvas>
   <canvas width="80" height="80" id="next" style="background:#111; margin-top:10px; border:2px solid white;"></canvas>
   <p>Score: <span id="score">0</span> | Level: <span id="level">1</span> | Lines: <span id="lines">0</span></p>
@@ -247,16 +252,31 @@
       paused = true;
       const list = document.getElementById('keyList');
       list.innerHTML = '';
+      const keyOptions = [
+        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 
+        '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
+        'Shift', 'Alt', 'Ctrl', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', ' '
+      ];
+      
       for (const key in controls) {
         const label = document.createElement('label');
         label.textContent = key + ': ';
-        const input = document.createElement('input');
-        input.value = controls[key];
-        input.onchange = () => controls[key] = input.value.toLowerCase();
+        const select = document.createElement('select');
+        
+        keyOptions.forEach(k => {
+          const option = document.createElement('option');
+          option.value = k;
+          option.textContent = k;
+          if (controls[key] === k) option.selected = true;
+          select.appendChild(option);
+        });
+        
+        select.onchange = () => controls[key] = select.value;
         list.appendChild(label);
-        list.appendChild(input);
+        list.appendChild(select);
         list.appendChild(document.createElement('br'));
       }
+      
       document.getElementById('settings').style.display = 'block';
     }
 
